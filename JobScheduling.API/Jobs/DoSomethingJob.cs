@@ -5,21 +5,18 @@ using TickerQ.Utilities.Models;
 
 namespace JobScheduling.API.Jobs;
 
-public class DoSomethingJob(
-    IDoSomethingService doSomethingService,
-    ILogger<DoSomethingJob> logger)
+public class DoSomethingJob(IDoSomethingService doSomethingService)
 {
-    private readonly ILogger<DoSomethingJob> _logger = logger;
-
+    // TickerQ
     [TickerFunction(functionName: nameof(HangOnAsync))]
     public async Task HangOnAsync(TickerFunctionContext<SomethingDto> tickerContext, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("[{JobName}] Job iniciado. Id: {Id}.",
-           nameof(HangOnAsync), tickerContext.Request.Id);
-
         await doSomethingService.DoSomethingAsync(tickerContext.Request, cancellationToken);
+    }
 
-        _logger.LogInformation("[{JobName}] Job finalizado. Id: {Id}.",
-            nameof(HangOnAsync), tickerContext.Request.Id);
+    // Hangfire
+    public async Task HangOnAsync(SomethingDto somethingDto, CancellationToken cancellationToken)
+    {
+        await doSomethingService.DoSomethingAsync(somethingDto, cancellationToken);
     }
 }
