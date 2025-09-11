@@ -1,22 +1,19 @@
-using JobScheduling.API;
+using JobScheduling.API.Application;
 using JobScheduling.API.Endpoints;
-using JobScheduling.API.Extensions;
-using JobScheduling.API.Services;
-using Microsoft.EntityFrameworkCore;
+using JobScheduling.API.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<MyDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddApplication(builder.Configuration);
 
-builder.Services.AddBackgroundJob(builder.Configuration);
-builder.Services.AddScoped<IDoSomethingService, DoSomethingService>();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 app.UseBackgroundJob();
-app.MapSchedulingEndpoints();
+
+app.MapApiEndpoints();
 
 if (app.Environment.IsDevelopment())
 {
