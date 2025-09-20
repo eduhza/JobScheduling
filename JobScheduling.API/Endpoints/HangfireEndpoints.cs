@@ -28,8 +28,13 @@ public static class HangfireEndpoints
         app.MapPost("/hangfire/cronjob", CreateHangfireCronJob)
             .WithOpenApi()
             .Produces(200);
+
+        app.MapPost("/hangfire/teste/{id}", Test)
+            .WithOpenApi()
+            .Produces(200);
     }
 
+    #region Hangfire samples
     public static IResult CreateHangFireJob(
         [FromServices] IBackgroundJobClient backgroundJobClient,
         CancellationToken cancellationToken = default)
@@ -91,6 +96,47 @@ public static class HangfireEndpoints
 
         return Results.Ok($"Created cronjob {id}. Monitor the dashboards.");
     }
+    #endregion
+
+    #region Tests
+
+    public static IResult Test(
+        [FromQuery] int id,
+        [FromServices] IBackgroundJobClient backgroundJobClient,
+        [FromServices] IJobMetricsService jobMetricsService)
+    {
+        return id switch
+        {
+            1 => Test1e2(backgroundJobClient, jobMetricsService, "emails"),
+            2 => Test1e2(backgroundJobClient, jobMetricsService, "emails"),
+            3 => Test3(backgroundJobClient, jobMetricsService),
+            4 => Test4(backgroundJobClient, jobMetricsService),
+            _ => Results.BadRequest("Invalid test id. Use 1, 3, or 4.")
+        };
+    }
+
+    // Test 1: Enqueue 1,000,000 jobs in "emails" queue. Same POD consuming.
+    // Test 2: Enqueue 1,000,000 jobs in "default" queue. Another POD consuming.
+    public static IResult Test1e2(
+        [FromServices] IBackgroundJobClient backgroundJobClient,
+        [FromServices] IJobMetricsService jobMetricsService,
+        string queue)
+    {
+        var totalJobs = 1_000_000;
+        jobMetricsService.StartInsertion();
+        for (int i = 0; i < totalJobs; i++)
+        {
+            backgroundJobClient.Create<HangfireDoSomethingJob>(queue,
+                job => job.HangOnAsync(
+                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire Test1"),
+                    CancellationToken.None),
+                state: new EnqueuedState());
+            jobMetricsService.IncrementInsertion();
+        }
+        jobMetricsService.FinishInsertion();
+        var result = jobMetricsService.Snapshot();
+        return Results.Ok(result);
+    }
 
     // Test 3: Enqueue 1,000,000 jobs in "default" queue and 1,000 jobs in "critical" queue,
     // with "critical" jobs interspersed every 1,000 "default" jobs.
@@ -149,16 +195,10 @@ public static class HangfireEndpoints
                     CancellationToken.None),
                 state: new EnqueuedState());
             jobMetricsService.IncrementInsertion();
-
-
-            jobMetricsService.IncrementInsertion();
-
-
-
         }
         jobMetricsService.FinishInsertion();
         var result = jobMetricsService.Snapshot();
         return Results.Ok(result);
     }
-
+    #endregion
 }

@@ -15,8 +15,8 @@ services:
     networks:
       - my-network
 
-  api:
-    container_name: jobscheduling_api
+  api1:
+    container_name: jobscheduling_1
     # image: ${DOCKER_REGISTRY-}JobSchedulingAPI # Usa uma imagem pré-construída se disponível sem reconstruir com o Dockerfile
     build: # Constrói a imagem usando o Dockerfile especificado SEMPRE
       context: .
@@ -24,8 +24,9 @@ services:
     environment:
       - ConnectionStrings__DefaultConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=postgres;Pooling=true;Include Error Detail=true;
       - ConnectionStrings__TaskDbConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=db_invoicycore_tasks;Pooling=true;Include Error Detail=true;
-      - Hangfire__Server__Enabled=false
-      - Hangfire__Server__Queues=default,emails,critical,notifications
+      - Library=Hangfire
+      - Hangfire__Server__Enabled=true
+      - Hangfire__Server__Queues=emails
     ports:
       - "8080:8080"
       - "8081:8081"
@@ -34,8 +35,8 @@ services:
     networks:
       - my-network
 
-  worker:
-    container_name: jobscheduling_worker
+  api2:
+    container_name: jobscheduling_2
     # image: ${DOCKER_REGISTRY-}JobSchedulingAPI  
     build:
       context: .
@@ -43,8 +44,9 @@ services:
     environment:
       - ConnectionStrings__DefaultConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=postgres;Pooling=true;Include Error Detail=true;
       - ConnectionStrings__TaskDbConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=db_invoicycore_tasks;Pooling=true;Include Error Detail=true;
+      - Library=Hangfire
       - Hangfire__Server__Enabled=true
-      - Hangfire__Server__Queues=default,emails,critical,notifications
+      - Hangfire__Server__Queues=default,critical,notifications
     ports:
       - "8082:8080"
       - "8083:8081"

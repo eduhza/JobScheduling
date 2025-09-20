@@ -18,6 +18,8 @@ namespace JobScheduling.API.Infrastructure;
 
 public static class DependencyInjection
 {
+    private static string? _library;
+
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDatabases(configuration);
@@ -31,8 +33,20 @@ public static class DependencyInjection
 
     private static IServiceCollection AddBackgroundJob(this IServiceCollection services, IConfiguration configuration)
     {
-        //services.AddTickerQLib();
-        services.AddHangfireLib(configuration);
+        _library = configuration["Library"]?.ToUpperInvariant();
+
+        switch (_library)
+        {
+            case "TICKERQ":
+                services.AddTickerQLib();
+                break;
+            case "HANGFIRE":
+                services.AddHangfireLib(configuration);
+                break;
+            default:
+                Console.WriteLine("Invalid BackgroundJob Library. Use 'TickerQ' or 'Hangfire'.");
+                break;
+        }
 
         return services;
     }
@@ -53,7 +67,7 @@ public static class DependencyInjection
 
             options.AddDashboard(config =>
             {
-                config.BasePath = "/tickerq";
+                config.BasePath = "/tickerq-dashboard";
                 config.EnableBasicAuth = true;
             });
         });
@@ -90,45 +104,52 @@ public static class DependencyInjection
 
     public static IApplicationBuilder UseBackgroundJob(this WebApplication app, IConfiguration configuration)
     {
-        app.UseHangfireDashboard("/hangfire-dashboard", new DashboardOptions
+        if (_library == "HANGFIRE")
         {
-            AsyncAuthorization = [new HangfireAuthorizationFilter()]
-        });
+            app.UseHangfireDashboard("/hangfire-dashboard", new DashboardOptions
+            {
+                AsyncAuthorization = [new HangfireAuthorizationFilter()]
+            });
 
-        // Example on how to create jobs when the application starts
-        //app.Services.UseHangfireJobsExamples();
-        var serverEnabled = configuration["Hangfire:Server:Enabled"] == "true";
-        if (serverEnabled)
-        {
-            var recurringJobClient = app.Services.GetRequiredService<IRecurringJobManager>();
+            //app.Services.UseHangfireJobsExamples();
+            var serverEnabled = configuration["Hangfire:Server:Enabled"] == "true";
+            if (serverEnabled)
+            {
+                var recurringJobClient = app.Services.GetRequiredService<IRecurringJobManager>();
 
-            recurringJobClient.AddOrUpdate<HangfireDoSomethingJob>(
-                "Cron1",
-                job => job.HangOnAsync(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Helo from Cron1"), default),
-                "0/1 * * * *"
-            );
-            recurringJobClient.AddOrUpdate<HangfireDoSomethingJob>(
-                "Cron2",
-                job => job.HangOnAsync(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Helo from Cron2"), default),
-                "0/2 * * * *"
-            );
-            recurringJobClient.AddOrUpdate<HangfireDoSomethingJob>(
-                "Cron3",
-                job => job.HangOnAsync(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Helo from Cron3"), default),
-                "0/5 * * * *"
-            );
+                recurringJobClient.AddOrUpdate<HangfireDoSomethingJob>(
+                    "Cron1",
+                    job => job.HangOnAsync(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Helo from Cron1"), default),
+                    "0/1 * * * *"
+                );
+                recurringJobClient.AddOrUpdate<HangfireDoSomethingJob>(
+                    "Cron2",
+                    job => job.HangOnAsync(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Helo from Cron2"), default),
+                    "0/2 * * * *"
+                );
+                recurringJobClient.AddOrUpdate<HangfireDoSomethingJob>(
+                    "Cron3",
+                    job => job.HangOnAsync(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Helo from Cron3"), default),
+                    "0/5 * * * *"
+                );
+            }
         }
 
-        //app.UseTickerQ();
-        //using (var scope = app.Services.CreateScope())
-        //{
-        //    await scope.ServiceProvider.UseTickerQJobs();//.ConfigureAwait(false).GetAwaiter().GetResult();
-        //}
+        if (_library == "TICKERQ")
+        {
+            app.UseTickerQ();
+            //using var scope = app.Services.CreateScope();
+            //scope.ServiceProvider.UseTickerQJobs().ConfigureAwait(false).GetAwaiter().GetResult();
+
+            // CronJobs do not need to be recreated on application start
+            // Decorate the job with [TickerFunction] with a cron expression and TickerQ will take care of it
+        }
 
         return app;
     }
 
-    private static IServiceProvider UseHangfireJobsExamples(this IServiceProvider serviceProvider)
+    // Example on how to create jobs when the application starts
+    private static IServiceProvider UseHangfireJobs(this IServiceProvider serviceProvider)
     {
         var backgroundJobClient = serviceProvider.GetRequiredService<IBackgroundJobClient>();
         var recurringJobClient = serviceProvider.GetRequiredService<IRecurringJobManager>();
@@ -161,6 +182,7 @@ public static class DependencyInjection
         return serviceProvider;
     }
 
+    // Example on how to create jobs when the application starts
     private static async Task<IServiceProvider> UseTickerQJobs(this IServiceProvider serviceProvider)
     {
         var timeTickerManager = serviceProvider.GetRequiredService<ITimeTickerManager<TimeTicker>>();

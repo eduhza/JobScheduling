@@ -32,10 +32,28 @@ public class TickerQDoSomethingJob(IDoSomethingService service) : IDoSomethingJo
         Console.WriteLine("PARAMETERLESS");
     }
 
-    [TickerFunction(nameof(CronConsoleLog), "* * * * *")]
-    public void CronConsoleLog()
+    //[TickerFunction(nameof(CronConsoleLog), "* * * * *")]
+    //public void CronConsoleLog()
+    //{
+    //    Console.WriteLine("This is a cronjob.");
+    //}
+
+    [TickerFunction(nameof(CronJob1), "0/1 * * * *")]
+    public async Task CronJob1(TickerFunctionContext<SomethingDto> ctx, CancellationToken ct)
     {
-        Console.WriteLine("This is a cronjob.");
+        await service.DoSomethingAsync(ctx.Request, ct);
+    }
+
+    [TickerFunction(nameof(CronJob2), "0/2 * * * *")]
+    public async Task CronJob2(TickerFunctionContext<SomethingDto> ctx, CancellationToken ct)
+    {
+        await service.DoSomethingAsync(ctx.Request, ct);
+    }
+
+    [TickerFunction(nameof(CronJob3), "0/2 * * * *")]
+    public async Task CronJob3(TickerFunctionContext<SomethingDto> ctx, CancellationToken ct)
+    {
+        await service.DoSomethingAsync(ctx.Request, ct);
     }
 
     public async Task HangOnAsync(SomethingDto dto, CancellationToken ct)
