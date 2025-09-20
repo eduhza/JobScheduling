@@ -1,4 +1,5 @@
 using JobScheduling.API.Application.Services;
+using JobScheduling.API.Application.Services.Interfaces;
 
 namespace JobScheduling.API.Application;
 

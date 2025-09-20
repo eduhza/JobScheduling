@@ -1,5 +1,5 @@
 using JobScheduling.API.Application.Jobs.DoSomething;
-using JobScheduling.API.Application.Services;
+using JobScheduling.API.Application.Services.Interfaces;
 using JobScheduling.API.Models;
 using TickerQ.Utilities.Base;
 using TickerQ.Utilities.Models;
@@ -14,10 +14,22 @@ public class TickerQDoSomethingJob(IDoSomethingService service) : IDoSomethingJo
         await service.DoSomethingAsync(ctx.Request, ct);
     }
 
+    [TickerFunction(nameof(HangOnHighPriorityAsync), TickerQ.Utilities.Enums.TickerTaskPriority.High)]
+    public async Task HangOnHighPriorityAsync(TickerFunctionContext<SomethingDto> ctx, CancellationToken ct)
+    {
+        await service.DoSomethingAsync(ctx.Request, ct);
+    }
+
     [TickerFunction(nameof(ConsoleLog), TickerQ.Utilities.Enums.TickerTaskPriority.Normal)]
     public void ConsoleLog(TickerFunctionContext<string> ctx)
     {
         Console.WriteLine(ctx.Request);
+    }
+
+    [TickerFunction(nameof(EmptyConsoleLog), TickerQ.Utilities.Enums.TickerTaskPriority.Normal)]
+    public void EmptyConsoleLog()
+    {
+        Console.WriteLine("PARAMETERLESS");
     }
 
     [TickerFunction(nameof(CronConsoleLog), "* * * * *")]

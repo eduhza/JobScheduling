@@ -11,7 +11,7 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-app.UseBackgroundJob();
+app.UseBackgroundJob(builder.Configuration);
 
 app.MapApiEndpoints();
 

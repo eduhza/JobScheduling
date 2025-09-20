@@ -22,10 +22,10 @@ public static class TickerQEndpoints
 
         app.MapGet("/tickerq/timejob/{jobId}", GetTickerQTimeJob)
             .WithOpenApi()
+            .WithName("TickerQJobDetails")
             .Produces(200);
 
         app.MapPost("/tickerq/cronjob", CreateTickerQCronJob)
-            .WithName("tickerq-cronjob")
             .WithOpenApi()
             .Produces(200);
     }
@@ -37,22 +37,17 @@ public static class TickerQEndpoints
     {
         var result = await timeTickerManager.AddAsync(new TimeTicker
         {
-            Request = TickerHelper.CreateTickerRequest(new SomethingDto
-            {
-                Id = id,
-                Library = "TickerQ",
-                Message = $"Message {id} from TimeTicker."
-            }),
-            ExecutionTime = DateTime.UtcNow.AddSeconds(10),
+            Request = TickerHelper.CreateTickerRequest(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "TickerQ")),
+            //ExecutionTime = DateTime.UtcNow.AddSeconds(10),
             Function = nameof(TickerQDoSomethingJob.HangOnAsync),
             Description = $"Timed job {id} from TickerQ.",
             Retries = 3,
-            RetryIntervals = [1, 3, 10]
+            RetryIntervals = [20, 60, 100] // set in seconds
         }, cancellationToken);
 
         var jobId = result.Result.Id;
 
-        return Results.AcceptedAtRoute("JobDetails", new { jobId }, jobId);
+        return Results.AcceptedAtRoute("TickerQJobDetails", new { jobId }, jobId);
     }
 
     public static async Task<IResult> CreateMultipleTickerQTimeJob(
@@ -87,12 +82,7 @@ public static class TickerQEndpoints
         var id = Random.Shared.Next(1, 1000);
         await cronTickerManager.AddAsync(new CronTicker
         {
-            Request = TickerHelper.CreateTickerRequest(new SomethingDto
-            {
-                Id = id,
-                Library = "TickerQ",
-                Message = $"Message {id} from CronTicker."
-            }),
+            Request = TickerHelper.CreateTickerRequest(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "TickerQ")),
             Expression = cronExpression,
             Function = nameof(TickerQDoSomethingJob.HangOnAsync),
             Description = $"Cron job {id} from TickerQ",

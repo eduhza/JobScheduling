@@ -1,6 +1,6 @@
 using JobScheduling.API.Models;
 
-namespace JobScheduling.API.Application.Services;
+namespace JobScheduling.API.Application.Services.Interfaces;
 
 public interface IDoSomethingService
 {

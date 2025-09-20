@@ -1,4 +1,6 @@
 using Hangfire;
+using Hangfire.States;
+using JobScheduling.API.Application.Services.Interfaces;
 using JobScheduling.API.Infrastructure.Jobs.DoSomething;
 using JobScheduling.API.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -20,6 +22,7 @@ public static class HangfireEndpoints
 
         app.MapGet("/hangfire/timejob/{jobId}", GetHangfireTimeJob)
             .WithOpenApi()
+            .WithName("HangfireJobDetails")
             .Produces(200);
 
         app.MapPost("/hangfire/cronjob", CreateHangfireCronJob)
@@ -29,23 +32,19 @@ public static class HangfireEndpoints
 
     public static IResult CreateHangFireJob(
         [FromServices] IBackgroundJobClient backgroundJobClient,
-        int id = 1,
         CancellationToken cancellationToken = default)
     {
-        var jobId = backgroundJobClient.Schedule<HangfireDoSomethingJob>(
+        var jobId = backgroundJobClient.Create<HangfireDoSomethingJob>(
             //queue: "mail",
-            job => job.HangOnAsync(new SomethingDto
-            {
-                Id = id,
-                Library = "Hangfire",
-                Message = $"Message {id} from BackgroundJobClient"
-            }, cancellationToken),
-        TimeSpan.FromSeconds(10));
+            job => job.HangOnAsync(
+                new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire"),
+                CancellationToken.None),
+            state: new EnqueuedState());
 
-        backgroundJobClient.ContinueJobWith(jobId,
-            () => Console.WriteLine($"Job {jobId} has been processed."));
+        //backgroundJobClient.ContinueJobWith(jobId,
+        //    () => Console.WriteLine($"Job {jobId} has been processed."));
 
-        return Results.AcceptedAtRoute("JobDetails", new { jobId }, jobId);
+        return Results.AcceptedAtRoute("HangfireJobDetails", new { jobId }, jobId);
     }
 
     public static IResult CreateMultipleHangfireJobs(
@@ -56,11 +55,11 @@ public static class HangfireEndpoints
         var watch = Stopwatch.StartNew();
         for (int i = 0; i < count; i++)
         {
-            CreateHangFireJob(hangfireClient, i + 1, cancellationToken);
+            CreateHangFireJob(hangfireClient, cancellationToken);
         }
         watch.Stop();
 
-        return Results.Ok($"Enqueued {count} jobs. Monitor the dashboards.");
+        return Results.Ok($"Enqueued {count} jobs in {watch.Elapsed}. Monitor the dashboards.");
     }
 
     public static IResult GetHangfireTimeJob(
@@ -72,9 +71,9 @@ public static class HangfireEndpoints
             return Results.NotFound($"Job {jobId} not found.");
 
         var jobDetais = JobStorage.Current.GetMonitoringApi().JobDetails(jobId);
+        var lastJob = jobDetais.History.OrderByDescending(h => h.CreatedAt).First();
 
-        return Results.Ok(state.State);
-        return Results.Ok(jobDetais.History.OrderByDescending(h => h.CreatedAt).First().StateName);
+        return Results.Ok(lastJob);
     }
 
     public static IResult CreateHangfireCronJob(
@@ -82,17 +81,84 @@ public static class HangfireEndpoints
         [FromServices] IRecurringJobManager recurringJobManager,
         CancellationToken cancellationToken)
     {
-        var id = Random.Shared.Next(1, 1000);
+        var id = Guid.NewGuid();
         recurringJobManager.AddOrUpdate<HangfireDoSomethingJob>(
             "hangfire-recurring",
-            job => job.HangOnAsync(new SomethingDto
-            {
-                Id = id,
-                Library = "Hangfire",
-                Message = $"Message {id} from RecurringJobManager"
-            }, cancellationToken),
+            job => job.HangOnAsync(
+                new SomethingDto(id, DateTime.UtcNow, $"Hangfire Cronjob {id}"),
+                cancellationToken),
             cronExpression);
 
         return Results.Ok($"Created cronjob {id}. Monitor the dashboards.");
     }
+
+    // Test 3: Enqueue 1,000,000 jobs in "default" queue and 1,000 jobs in "critical" queue,
+    // with "critical" jobs interspersed every 1,000 "default" jobs.
+    public static IResult Test3(
+        [FromServices] IBackgroundJobClient backgroundJobClient,
+        [FromServices] IJobMetricsService jobMetricsService)
+    {
+        var totalDefault = 1_000_000;
+        var totalCritical = 1_000;
+
+        jobMetricsService.StartInsertion();
+        for (int i = 0; i < totalDefault; i++)
+        {
+            backgroundJobClient.Create<HangfireDoSomethingJob>("default",
+                job => job.HangOnAsync(
+                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire Test3 Default"),
+                    CancellationToken.None),
+                state: new EnqueuedState());
+            jobMetricsService.IncrementInsertion();
+
+            if (i % 1_000 == 0 && totalCritical-- > 0)
+            {
+                backgroundJobClient.Create<HangfireDoSomethingJob>("critical",
+                    job => job.HangOnAsync(
+                        new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire Test3 Critical"),
+                        CancellationToken.None),
+                    state: new EnqueuedState());
+                jobMetricsService.IncrementInsertion();
+            }
+        }
+        jobMetricsService.FinishInsertion();
+
+        var result = jobMetricsService.Snapshot();
+
+        return Results.Ok(result);
+    }
+
+    // Test 4: Enqueue 1,000,000 jobs in "default" and "critical" queues, one after the other.
+    public static IResult Test4(
+        [FromServices] IBackgroundJobClient backgroundJobClient,
+        [FromServices] IJobMetricsService jobMetricsService)
+    {
+        var totalJobs = 1_000_000;
+        jobMetricsService.StartInsertion();
+        for (int i = 0; i < totalJobs; i++)
+        {
+            backgroundJobClient.Create<HangfireDoSomethingJob>("default",
+                job => job.HangOnAsync(
+                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire Test4 Default"),
+                    CancellationToken.None),
+                state: new EnqueuedState());
+            jobMetricsService.IncrementInsertion();
+            backgroundJobClient.Create<HangfireDoSomethingJob>("critical",
+                job => job.HangOnAsync(
+                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire Test4 Critical"),
+                    CancellationToken.None),
+                state: new EnqueuedState());
+            jobMetricsService.IncrementInsertion();
+
+
+            jobMetricsService.IncrementInsertion();
+
+
+
+        }
+        jobMetricsService.FinishInsertion();
+        var result = jobMetricsService.Snapshot();
+        return Results.Ok(result);
+    }
+
 }

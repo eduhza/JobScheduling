@@ -1,0 +1,61 @@
+services:
+  jobscheduling-db:
+    image: postgres:latest
+    container_name: jobscheduling-db-container
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=123123
+      - POSTGRES_DB=db_invoicycore_tasks 
+      # - POSTGRES_MULTIPLE_DATABASES=postgres,db_invoicycore_tasks
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d
+      - jobscheduling_postgres_data:/var/lib/postgresql/data
+    networks:
+      - my-network
+
+  api:
+    container_name: jobscheduling_api
+    # image: ${DOCKER_REGISTRY-}JobSchedulingAPI # Usa uma imagem pré-construída se disponível sem reconstruir com o Dockerfile
+    build: # Constrói a imagem usando o Dockerfile especificado SEMPRE
+      context: .
+      dockerfile: Dockerfile 
+    environment:
+      - ConnectionStrings__DefaultConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=postgres;Pooling=true;Include Error Detail=true;
+      - ConnectionStrings__TaskDbConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=db_invoicycore_tasks;Pooling=true;Include Error Detail=true;
+      - Hangfire__Server__Enabled=false
+      - Hangfire__Server__Queues=default,emails,critical,notifications
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    depends_on:
+      - jobscheduling-db
+    networks:
+      - my-network
+
+  worker:
+    container_name: jobscheduling_worker
+    # image: ${DOCKER_REGISTRY-}JobSchedulingAPI  
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - ConnectionStrings__DefaultConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=postgres;Pooling=true;Include Error Detail=true;
+      - ConnectionStrings__TaskDbConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=db_invoicycore_tasks;Pooling=true;Include Error Detail=true;
+      - Hangfire__Server__Enabled=true
+      - Hangfire__Server__Queues=default,emails,critical,notifications
+    ports:
+      - "8082:8080"
+      - "8083:8081"
+    depends_on:
+      - jobscheduling-db
+    networks:
+      - my-network
+
+volumes:
+  jobscheduling_postgres_data:
+
+networks:
+  my-network:
+    driver: bridge

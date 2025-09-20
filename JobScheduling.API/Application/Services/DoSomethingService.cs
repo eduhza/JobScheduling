@@ -1,3 +1,4 @@
+using JobScheduling.API.Application.Services.Interfaces;
 using JobScheduling.API.Models;
 
 namespace JobScheduling.API.Application.Services;
@@ -6,8 +7,10 @@ public class DoSomethingService(ILogger<DoSomethingService> logger) : IDoSomethi
 {
     public async Task DoSomethingAsync(SomethingDto somethingDto, CancellationToken cancellationToken)
     {
-        logger.LogInformation("[{Library}] ID: {Id}. Message: {Message}",
-            somethingDto.Library, somethingDto.Id, somethingDto.Message);
+        var now = DateTime.UtcNow;
+        logger.LogInformation("{Message}] Enviando email ID {Id}...", somethingDto.Message, somethingDto.Id.ToString()[0..5]);
         await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+        logger.LogInformation("[{Message}] ID: {Id}... Criado: {CreatedAt} - Executado {Now}",
+            somethingDto.Message, somethingDto.Id.ToString()[0..5], somethingDto.CreatedAt, now);
     }
 }
