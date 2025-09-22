@@ -100,39 +100,49 @@ public static class HangfireEndpoints
 
     #region Tests
 
-    public static IResult Test(
-        [FromQuery] int id,
+    public static async Task<IResult> Test(
+        [FromRoute] int id,
         [FromServices] IBackgroundJobClient backgroundJobClient,
         [FromServices] IJobMetricsService jobMetricsService)
     {
         return id switch
         {
-            1 => Test1e2(backgroundJobClient, jobMetricsService, "emails"),
-            2 => Test1e2(backgroundJobClient, jobMetricsService, "emails"),
-            3 => Test3(backgroundJobClient, jobMetricsService),
-            4 => Test4(backgroundJobClient, jobMetricsService),
+            1 => await Test1e2(backgroundJobClient, jobMetricsService, "emails"),
+            2 => await Test1e2(backgroundJobClient, jobMetricsService, "default"),
+            3 => await Test3(backgroundJobClient, jobMetricsService),
+            4 => await Test4(backgroundJobClient, jobMetricsService),
             _ => Results.BadRequest("Invalid test id. Use 1, 3, or 4.")
         };
     }
 
     // Test 1: Enqueue 1,000,000 jobs in "emails" queue. Same POD consuming.
     // Test 2: Enqueue 1,000,000 jobs in "default" queue. Another POD consuming.
-    public static IResult Test1e2(
+    public static async Task<IResult> Test1e2(
         [FromServices] IBackgroundJobClient backgroundJobClient,
         [FromServices] IJobMetricsService jobMetricsService,
         string queue)
     {
         var totalJobs = 1_000_000;
         jobMetricsService.StartInsertion();
-        for (int i = 0; i < totalJobs; i++)
+
+        await Parallel.ForEachAsync(Enumerable.Range(0, totalJobs), new ParallelOptions { MaxDegreeOfParallelism = 10 }, async (i, ct) =>
         {
             backgroundJobClient.Create<HangfireDoSomethingJob>(queue,
                 job => job.HangOnAsync(
-                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire Test1"),
+                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"Hangfire {queue} - {i}"),
                     CancellationToken.None),
                 state: new EnqueuedState());
             jobMetricsService.IncrementInsertion();
-        }
+        });
+        //for (int i = 0; i < totalJobs; i++)
+        //{
+        //    backgroundJobClient.Create<HangfireDoSomethingJob>(queue,
+        //        job => job.HangOnAsync(
+        //            new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"Hangfire {queue} - {i}"),
+        //            CancellationToken.None),
+        //        state: new EnqueuedState());
+        //    jobMetricsService.IncrementInsertion();
+        //}
         jobMetricsService.FinishInsertion();
         var result = jobMetricsService.Snapshot();
         return Results.Ok(result);
@@ -140,7 +150,7 @@ public static class HangfireEndpoints
 
     // Test 3: Enqueue 1,000,000 jobs in "default" queue and 1,000 jobs in "critical" queue,
     // with "critical" jobs interspersed every 1,000 "default" jobs.
-    public static IResult Test3(
+    public static async Task<IResult> Test3(
         [FromServices] IBackgroundJobClient backgroundJobClient,
         [FromServices] IJobMetricsService jobMetricsService)
     {
@@ -148,11 +158,11 @@ public static class HangfireEndpoints
         var totalCritical = 1_000;
 
         jobMetricsService.StartInsertion();
-        for (int i = 0; i < totalDefault; i++)
+        await Parallel.ForEachAsync(Enumerable.Range(0, totalDefault), new ParallelOptions { MaxDegreeOfParallelism = 10 }, async (i, ct) =>
         {
             backgroundJobClient.Create<HangfireDoSomethingJob>("default",
                 job => job.HangOnAsync(
-                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire Test3 Default"),
+                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"Hangfire Test3 Default - {i}"),
                     CancellationToken.None),
                 state: new EnqueuedState());
             jobMetricsService.IncrementInsertion();
@@ -161,12 +171,32 @@ public static class HangfireEndpoints
             {
                 backgroundJobClient.Create<HangfireDoSomethingJob>("critical",
                     job => job.HangOnAsync(
-                        new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire Test3 Critical"),
+                        new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"Hangfire Test3 Critical - {i}"),
                         CancellationToken.None),
                     state: new EnqueuedState());
                 jobMetricsService.IncrementInsertion();
             }
-        }
+        });
+
+        //for (int i = 0; i < totalDefault; i++)
+        //{
+        //    backgroundJobClient.Create<HangfireDoSomethingJob>("default",
+        //        job => job.HangOnAsync(
+        //            new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"Hangfire Test3 Default - {i}"),
+        //            CancellationToken.None),
+        //        state: new EnqueuedState());
+        //    jobMetricsService.IncrementInsertion();
+
+        //    if (i % 1_000 == 0 && totalCritical-- > 0)
+        //    {
+        //        backgroundJobClient.Create<HangfireDoSomethingJob>("critical",
+        //            job => job.HangOnAsync(
+        //                new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"Hangfire Test3 Critical - {i}"),
+        //                CancellationToken.None),
+        //            state: new EnqueuedState());
+        //        jobMetricsService.IncrementInsertion();
+        //    }
+        //}
         jobMetricsService.FinishInsertion();
 
         var result = jobMetricsService.Snapshot();
@@ -174,28 +204,29 @@ public static class HangfireEndpoints
         return Results.Ok(result);
     }
 
-    // Test 4: Enqueue 1,000,000 jobs in "default" and "critical" queues, one after the other.
-    public static IResult Test4(
+    // Test 4: Enqueue 500,000 jobs in "default" and "critical" queues, one after the other.
+    public static async Task<IResult> Test4(
         [FromServices] IBackgroundJobClient backgroundJobClient,
         [FromServices] IJobMetricsService jobMetricsService)
     {
-        var totalJobs = 1_000_000;
+        var totalJobs = 500_000;
         jobMetricsService.StartInsertion();
-        for (int i = 0; i < totalJobs; i++)
+        await Parallel.ForEachAsync(Enumerable.Range(0, totalJobs), new ParallelOptions { MaxDegreeOfParallelism = 10 }, async (i, ct) =>
         {
             backgroundJobClient.Create<HangfireDoSomethingJob>("default",
                 job => job.HangOnAsync(
-                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire Test4 Default"),
+                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"Hangfire Test3 Default - {i}"),
                     CancellationToken.None),
                 state: new EnqueuedState());
             jobMetricsService.IncrementInsertion();
+
             backgroundJobClient.Create<HangfireDoSomethingJob>("critical",
                 job => job.HangOnAsync(
-                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "Hangfire Test4 Critical"),
+                    new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"Hangfire Test3 Critical - {i}"),
                     CancellationToken.None),
                 state: new EnqueuedState());
             jobMetricsService.IncrementInsertion();
-        }
+        });
         jobMetricsService.FinishInsertion();
         var result = jobMetricsService.Snapshot();
         return Results.Ok(result);

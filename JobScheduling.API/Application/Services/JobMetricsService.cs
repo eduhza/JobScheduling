@@ -22,15 +22,15 @@ public class JobMetricsService : IJobMetricsService
     public MetricsSnapshot Snapshot()
     {
         var all = _jobs.Values;
-        var firstStart = all.Min(j => j.start);
-        var lastEnd = all.Max(j => j.end);
-        var totalExec = (lastEnd - firstStart).TotalSeconds;
+        var firstStart = all?.Min(j => j.start);
+        var lastEnd = all?.Max(j => j.end);
+        var totalExec = (lastEnd - firstStart)?.TotalSeconds;
 
         return new MetricsSnapshot(
             InsertTotal: _insertStopwatch.Elapsed.TotalSeconds,
             InsertAvg: _insertStopwatch.Elapsed.TotalSeconds / _insertCount,
-            ExecTotal: totalExec,
-            ExecAvg: totalExec / _jobs.Count
+            ExecTotal: totalExec ?? 0,
+            ExecAvg: (totalExec / _jobs.Count) ?? 0
         );
     }
 }

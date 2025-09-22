@@ -6,18 +6,26 @@ using TickerQ.Utilities.Models;
 
 namespace JobScheduling.API.Infrastructure.Jobs.DoSomething;
 
-public class TickerQDoSomethingJob(IDoSomethingService service) : IDoSomethingJob
+public class TickerQDoSomethingJob(
+    IDoSomethingService service,
+    IJobMetricsService jobMetricsService) : IDoSomethingJob
 {
     [TickerFunction(nameof(HangOnAsync), TickerQ.Utilities.Enums.TickerTaskPriority.Normal)]
     public async Task HangOnAsync(TickerFunctionContext<SomethingDto> ctx, CancellationToken ct)
     {
+        var startTime = DateTime.UtcNow;
         await service.DoSomethingAsync(ctx.Request, ct);
+        var endTime = DateTime.UtcNow;
+        jobMetricsService.RegisterExecution(ctx.Request.Id, ctx.Request.CreatedAt, startTime, endTime);
     }
 
     [TickerFunction(nameof(HangOnHighPriorityAsync), TickerQ.Utilities.Enums.TickerTaskPriority.High)]
     public async Task HangOnHighPriorityAsync(TickerFunctionContext<SomethingDto> ctx, CancellationToken ct)
     {
+        var startTime = DateTime.UtcNow;
         await service.DoSomethingAsync(ctx.Request, ct);
+        var endTime = DateTime.UtcNow;
+        jobMetricsService.RegisterExecution(ctx.Request.Id, ctx.Request.CreatedAt, startTime, endTime);
     }
 
     [TickerFunction(nameof(ConsoleLog), TickerQ.Utilities.Enums.TickerTaskPriority.Normal)]

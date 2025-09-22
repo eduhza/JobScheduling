@@ -9,7 +9,7 @@ public class DoSomethingService(ILogger<DoSomethingService> logger) : IDoSomethi
     {
         var now = DateTime.UtcNow;
         logger.LogInformation("{Message}] Enviando email ID {Id}...", somethingDto.Message, somethingDto.Id.ToString()[0..5]);
-        await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+        await Task.Delay(TimeSpan.FromMilliseconds(1), cancellationToken);
         logger.LogInformation("[{Message}] ID: {Id}... Criado: {CreatedAt} - Executado {Now}",
             somethingDto.Message, somethingDto.Id.ToString()[0..5], somethingDto.CreatedAt, now);
     }
