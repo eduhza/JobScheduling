@@ -21,7 +21,7 @@ public class JobMetricsService : IJobMetricsService
 
     public MetricsSnapshot Snapshot()
     {
-        var all = _jobs.Values;
+        var all = _jobs?.Values;
         var firstStart = all?.Min(j => j.start);
         var lastEnd = all?.Max(j => j.end);
         var totalExec = (lastEnd - firstStart)?.TotalSeconds;
@@ -30,7 +30,7 @@ public class JobMetricsService : IJobMetricsService
             InsertTotal: _insertStopwatch.Elapsed.TotalSeconds,
             InsertAvg: _insertStopwatch.Elapsed.TotalSeconds / _insertCount,
             ExecTotal: totalExec ?? 0,
-            ExecAvg: (totalExec / _jobs.Count) ?? 0
+            ExecAvg: (totalExec / _jobs?.Count) ?? 0
         );
     }
 }

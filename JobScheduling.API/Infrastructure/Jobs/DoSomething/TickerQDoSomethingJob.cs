@@ -47,21 +47,24 @@ public class TickerQDoSomethingJob(
     //}
 
     [TickerFunction(nameof(CronJob1), "0/1 * * * *")]
-    public async Task CronJob1(TickerFunctionContext<SomethingDto> ctx, CancellationToken ct)
+    public async Task CronJob1(CancellationToken ct)
     {
-        await service.DoSomethingAsync(ctx.Request, ct);
+        var somethingDto = new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "TickerQ CronJob1");
+        await service.DoSomethingAsync(somethingDto, ct);
     }
 
     [TickerFunction(nameof(CronJob2), "0/2 * * * *")]
-    public async Task CronJob2(TickerFunctionContext<SomethingDto> ctx, CancellationToken ct)
+    public async Task CronJob2(CancellationToken ct)
     {
-        await service.DoSomethingAsync(ctx.Request, ct);
+        var somethingDto = new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "TickerQ CronJob2");
+        await service.DoSomethingAsync(somethingDto, ct);
     }
 
     [TickerFunction(nameof(CronJob3), "0/2 * * * *")]
-    public async Task CronJob3(TickerFunctionContext<SomethingDto> ctx, CancellationToken ct)
+    public async Task CronJob3(CancellationToken ct)
     {
-        await service.DoSomethingAsync(ctx.Request, ct);
+        var somethingDto = new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "TickerQ CronJob3");
+        await service.DoSomethingAsync(somethingDto, ct);
     }
 
     public async Task HangOnAsync(SomethingDto dto, CancellationToken ct)

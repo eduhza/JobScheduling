@@ -43,16 +43,17 @@ public static class TickerQEndpoints
         var result = await timeTickerManager.AddAsync(new TimeTicker
         {
             Request = TickerHelper.CreateTickerRequest(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "TickerQ")),
-            //ExecutionTime = DateTime.UtcNow.AddSeconds(10),
+            ExecutionTime = DateTime.UtcNow.AddSeconds(1),
             Function = nameof(TickerQDoSomethingJob.HangOnAsync),
             Description = $"Timed job {id} from TickerQ.",
             Retries = 3,
             RetryIntervals = [20, 60, 100] // set in seconds
         });
 
-        var jobId = result.Result.Id;
+        var jobId = result?.Result?.Id;
 
-        return Results.AcceptedAtRoute("TickerQJobDetails", new { jobId }, jobId);
+        return Results.Ok(jobId);
+        //return Results.AcceptedAtRoute("TickerQJobDetails", new { jobId }, jobId);
     }
 
     public static async Task<IResult> CreateMultipleTickerQTimeJob(
@@ -114,29 +115,40 @@ public static class TickerQEndpoints
     }
 
     // Test 1: Enqueue 1,000,000 jobs. Same POD consuming.
-    // Test 2: TickerQ do not support pod without server
+    // Test 2: 2 consumers
     public static async Task<IResult> Test1e2(
         [FromServices] ITimeTickerManager<TimeTicker> timeTickerManager,
         [FromServices] IJobMetricsService jobMetricsService)
     {
+        var stopwatch = new Stopwatch();
+        stopwatch.Start();
         var totalJobs = 1_000_000;
         jobMetricsService.StartInsertion();
-        await Parallel.ForEachAsync(Enumerable.Range(0, totalJobs), new ParallelOptions { MaxDegreeOfParallelism = 10 }, async (i, ct) =>
+        for (var i = 0; i < totalJobs; i++)
         {
             await timeTickerManager.AddAsync(new TimeTicker
             {
                 Request = TickerHelper.CreateTickerRequest(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"TickerQ Normal {i}")),
-                //ExecutionTime = DateTime.UtcNow.AddSeconds(10),
+                ExecutionTime = DateTime.UtcNow.AddSeconds(10),
                 Function = nameof(TickerQDoSomethingJob.HangOnAsync),
                 Description = $"Timed job {i} from TickerQ.",
                 Retries = 3,
                 RetryIntervals = [20, 60, 100] // set in seconds
-            }, ct);
+            });
             jobMetricsService.IncrementInsertion();
-        });
+        }
         jobMetricsService.FinishInsertion();
-        var result = jobMetricsService.Snapshot();
-        return Results.Ok(result);
+        stopwatch.Stop();
+        try
+        {
+            var result = jobMetricsService.Snapshot();
+            return Results.Ok(result);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception: {ex.Message} - {ex.InnerException?.Message}");
+            return Results.Ok(stopwatch.ElapsedMilliseconds);
+        }
     }
 
     // Test 3: Enqueue 1,000,000 jobs with "TaskPriority.Normal" and 1,000 jobs with "TaskPriority.High",
@@ -149,17 +161,17 @@ public static class TickerQEndpoints
         var totalCritical = 1_000;
 
         jobMetricsService.StartInsertion();
-        await Parallel.ForEachAsync(Enumerable.Range(0, totalDefault), new ParallelOptions { MaxDegreeOfParallelism = 10 }, async (i, ct) =>
+        for (var i = 0; i < totalDefault; i++)
         {
             await timeTickerManager.AddAsync(new TimeTicker
             {
                 Request = TickerHelper.CreateTickerRequest(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"TickerQ Normal {i}")),
-                //ExecutionTime = DateTime.UtcNow.AddSeconds(10),
+                ExecutionTime = DateTime.UtcNow.AddSeconds(10),
                 Function = nameof(TickerQDoSomethingJob.HangOnAsync),
                 Description = $"Timed job {i} from TickerQ.",
                 Retries = 3,
                 RetryIntervals = [20, 60, 100] // set in seconds
-            }, ct);
+            });
             jobMetricsService.IncrementInsertion();
 
             if (i % 1_000 == 0 && totalCritical-- > 0)
@@ -167,7 +179,7 @@ public static class TickerQEndpoints
                 await timeTickerManager.AddAsync(new TimeTicker
                 {
                     Request = TickerHelper.CreateTickerRequest(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, $"TickerQ High {i}")),
-                    //ExecutionTime = DateTime.UtcNow.AddSeconds(10),
+                    ExecutionTime = DateTime.UtcNow.AddSeconds(10),
                     Function = nameof(TickerQDoSomethingJob.HangOnHighPriorityAsync),
                     Description = $"Timed job {i} from TickerQ.",
                     Retries = 3,
@@ -175,7 +187,7 @@ public static class TickerQEndpoints
                 });
                 jobMetricsService.IncrementInsertion();
             }
-        });
+        }
         jobMetricsService.FinishInsertion();
 
         var result = jobMetricsService.Snapshot();
@@ -190,30 +202,30 @@ public static class TickerQEndpoints
     {
         var totalJobs = 500_000;
         jobMetricsService.StartInsertion();
-        await Parallel.ForEachAsync(Enumerable.Range(0, totalJobs), new ParallelOptions { MaxDegreeOfParallelism = 10 }, async (i, ct) =>
+        for (var i = 0; i < totalJobs; i++)
         {
             await timeTickerManager.AddAsync(new TimeTicker
             {
                 Request = TickerHelper.CreateTickerRequest(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "TickerQ")),
-                //ExecutionTime = DateTime.UtcNow.AddSeconds(10),
+                ExecutionTime = DateTime.UtcNow.AddSeconds(10),
                 Function = nameof(TickerQDoSomethingJob.HangOnAsync),
                 Description = $"Timed job {i} from TickerQ.",
                 Retries = 3,
                 RetryIntervals = [20, 60, 100] // set in seconds
-            }, ct);
+            });
             jobMetricsService.IncrementInsertion();
 
             await timeTickerManager.AddAsync(new TimeTicker
             {
                 Request = TickerHelper.CreateTickerRequest(new SomethingDto(Guid.NewGuid(), DateTime.UtcNow, "TickerQ")),
-                //ExecutionTime = DateTime.UtcNow.AddSeconds(10),
+                ExecutionTime = DateTime.UtcNow.AddSeconds(10),
                 Function = nameof(TickerQDoSomethingJob.HangOnHighPriorityAsync),
                 Description = $"Timed job {i} from TickerQ.",
                 Retries = 3,
                 RetryIntervals = [20, 60, 100] // set in seconds
-            }, ct);
+            });
             jobMetricsService.IncrementInsertion();
-        });
+        }
         jobMetricsService.FinishInsertion();
         var result = jobMetricsService.Snapshot();
         return Results.Ok(result);

@@ -24,9 +24,11 @@ services:
     environment:
       - ConnectionStrings__DefaultConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=postgres;Pooling=true;Include Error Detail=true;
       - ConnectionStrings__TaskDbConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=db_invoicycore_tasks;Pooling=true;Include Error Detail=true;
-      - Library=Hangfire
-      - Hangfire__Server__Enabled=true
+      - Library=TickerQ #Hangfire
+      - Hangfire__Server__Enabled=false
       - Hangfire__Server__Queues=emails
+      - TickerQBasicAuth__Username=admin 
+      - TickerQBasicAuth__Password=admin 
     ports:
       - "8080:8080"
       - "8081:8081"
@@ -44,9 +46,11 @@ services:
     environment:
       - ConnectionStrings__DefaultConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=postgres;Pooling=true;Include Error Detail=true;
       - ConnectionStrings__TaskDbConnection=User ID=admin;Password=123123;Host=jobscheduling-db;Port=5432;Database=db_invoicycore_tasks;Pooling=true;Include Error Detail=true;
-      - Library=Hangfire
-      - Hangfire__Server__Enabled=true
+      - Library=TickerQ #Hangfire
+      - Hangfire__Server__Enabled=false
       - Hangfire__Server__Queues=default,critical,notifications
+      - TickerQBasicAuth__Username=admin 
+      - TickerQBasicAuth__Password=admin 
     ports:
       - "8082:8080"
       - "8083:8081"
